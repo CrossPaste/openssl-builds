@@ -96,12 +96,16 @@ fun conanInstallCommand(profile: String, version: String, shared: String): Strin
     "install packages/openssl3 --output-folder build/openssl3/$profile --build=missing"
 )
 
-fun conanCommand(profile: String, version: String, shared: String, command: String): String = listOf(
+fun conanCommand(profile: String, version: String, shared: String, command: String): String = listOfNotNull(
     "conan",
     command,
     "--version=$version",
     "-pr:b default",
     "-pr:h profiles/$profile",
+    // windows-latest images ship only Visual Studio 2026 (18); without this,
+    // conan's VCVars resolves msvc 194 to the removed "Visual Studio 17"
+    // install and fails. VS 18 still carries the VC 14.4x (=194) toolset.
+    if (profile == "windows-x64") "-c \"tools.microsoft.msbuild:vs_version=18\"" else null,
     "-o \"*:shared=$shared\"",
     "-o \"openssl/*:no_apps=True\"",
     "-o \"openssl/*:no_zlib=True\""
