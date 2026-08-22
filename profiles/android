@@ -1,9 +1,15 @@
 include(base)
 [settings]
 os=Android
-os.api_level=21
+os.api_level=29
 compiler=clang
-compiler.version=14
+compiler.version=18
 
 [tool_requires]
-android-ndk/r20b
+android-ndk/r27c
+
+[conf]
+# Google Play requires 16 KB page-size support for apps targeting Android 15+
+# (NDK r27 supports it but does not default to it; r28+ defaults are not in the
+# pinned conan-center-index). Harmless padding on 4 KB-page devices and 32-bit.
+tools.build:sharedlinkflags=["-Wl,-z,max-page-size=16384"]
