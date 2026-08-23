@@ -160,6 +160,13 @@ workflow(
 
             run(command = prefix + "conan profile detect")
 
+            // Export the vendored (org-fork-pinned) openssl recipe into the local
+            // conan cache so it takes precedence over the floating conancenter
+            // remote. Without this the submodule is unused and recipe provenance
+            // floats; with it, the recipe is pinned by the submodule's git SHA —
+            // which also carries the fork's Android asm-target fix.
+            run(command = prefix + "conan export conan-center-index/recipes/openssl/3.x.x --version=$version")
+
             configuration.profiles.forEach { (profile, buildKind) ->
                 if (buildKind.buildDynamic) {
 //                    run(command = prefix + conanCreateCommand(profile, version, "True"))
