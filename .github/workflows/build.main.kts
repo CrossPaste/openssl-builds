@@ -195,10 +195,35 @@ workflow(
         }
     }
 
+    // OpenHarmony: no conan/openssl-recipe support for the ohos triples, so
+    // ohos/build.sh drives the asm-enabled generic linux-aarch64/linux-x86_64
+    // Configure targets with the OpenHarmony NDK clang (sources pinned by the
+    // same vendored conandata as every conan job) and hard-fails unless
+    // ecp_nistz256 + armcap/ia32cap markers are present in libcrypto.a.
+    // Output layout matches the conan jobs so aggregate merges it unchanged.
+    val ohosJob = job(
+        id = "ohos",
+        name = "ohos-$version",
+        runsOn = LinuxRunner
+    ) {
+        uses(action = CheckoutV4(submodules = true))
+        run(command = "./ohos/build.sh $version")
+        listOf("lib", "include").forEach { folder ->
+            run(command = "tar -rvf ohos.tar build/openssl3/*/$folder")
+        }
+        uses(
+            action = UploadArtifactV4(
+                name = "openssl-ohos-$version",
+                ifNoFilesFound = UploadArtifactV4.BehaviorIfNoFilesFound.Error,
+                path = listOf("ohos.tar")
+            )
+        )
+    }
+
     job(
         id = "aggregate",
         runsOn = UbuntuLatest,
-        needs = jobs
+        needs = jobs + ohosJob
     ) {
         uses(
             action = DownloadArtifactV4(
@@ -210,6 +235,7 @@ workflow(
         configurations.forEach {
             run(command = "tar -xvf ${it.name}.tar")
         }
+        run(command = "tar -xvf ohos.tar")
 
         run(
             command = "tar -czvf ../../openssl-$version.tar.gz *",

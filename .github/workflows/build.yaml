@@ -194,6 +194,26 @@ jobs:
         name: 'openssl-windows-${{ inputs.version }}'
         path: 'windows.tar'
         if-no-files-found: 'error'
+  ohos:
+    name: 'ohos-${{ inputs.version }}'
+    runs-on: 'ubuntu-latest'
+    steps:
+    - id: 'step-0'
+      uses: 'actions/checkout@v4'
+      with:
+        submodules: 'true'
+    - id: 'step-1'
+      run: './ohos/build.sh ${{ inputs.version }}'
+    - id: 'step-2'
+      run: 'tar -rvf ohos.tar build/openssl3/*/lib'
+    - id: 'step-3'
+      run: 'tar -rvf ohos.tar build/openssl3/*/include'
+    - id: 'step-4'
+      uses: 'actions/upload-artifact@v4'
+      with:
+        name: 'openssl-ohos-${{ inputs.version }}'
+        path: 'ohos.tar'
+        if-no-files-found: 'error'
   aggregate:
     runs-on: 'ubuntu-latest'
     needs:
@@ -201,6 +221,7 @@ jobs:
     - 'linux'
     - 'linux-docker'
     - 'windows'
+    - 'ohos'
     steps:
     - id: 'step-0'
       uses: 'actions/download-artifact@v4'
@@ -216,12 +237,14 @@ jobs:
     - id: 'step-4'
       run: 'tar -xvf windows.tar'
     - id: 'step-5'
-      working-directory: 'build/openssl3'
-      run: 'tar -czvf ../../openssl-${{ inputs.version }}.tar.gz *'
+      run: 'tar -xvf ohos.tar'
     - id: 'step-6'
       working-directory: 'build/openssl3'
-      run: 'zip --symlinks -r ../../openssl-${{ inputs.version }}.zip *'
+      run: 'tar -czvf ../../openssl-${{ inputs.version }}.tar.gz *'
     - id: 'step-7'
+      working-directory: 'build/openssl3'
+      run: 'zip --symlinks -r ../../openssl-${{ inputs.version }}.zip *'
+    - id: 'step-8'
       uses: 'actions/upload-artifact@v4'
       with:
         name: 'openssl-${{ inputs.version }}'
