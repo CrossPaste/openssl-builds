@@ -88,25 +88,38 @@ build_one() { # $1 = profile name, $2 = ohos triple, $3 = openssl target
   )
 }
 
-verify_asm() { # $1 = profile name, $2 = cap symbol (OPENSSL_armcap|OPENSSL_ia32cap)
-  local lib="$OUT/$1/lib/libcrypto.a" nm="$NDK/llvm/bin/llvm-nm"
-  local nistz cap
+verify_asm() { # $1 = profile, $2 = cap symbol, $3.. = required asm archive members
+  local profile="$1" capsym="$2"; shift 2
+  local lib="$OUT/$profile/lib/libcrypto.a" nm="$NDK/llvm/bin/llvm-nm" ar="$NDK/llvm/bin/llvm-ar"
+  local nistz cap member
   nistz=$("$nm" "$lib" 2>/dev/null | grep -c ecp_nistz256 || true)
-  cap=$("$nm" "$lib" 2>/dev/null | grep -c "$2" || true)
-  echo "== asm markers $1: ecp_nistz256=$nistz $2=$cap =="
+  cap=$("$nm" "$lib" 2>/dev/null | grep -c "$capsym" || true)
+  echo "== asm markers $profile: ecp_nistz256=$nistz $capsym=$cap =="
   if [ "$nistz" -eq 0 ] || [ "$cap" -eq 0 ]; then
-    echo "FATAL: $1 libcrypto.a has no constant-time P-256 assembly markers" >&2
+    echo "FATAL: $profile libcrypto.a has no constant-time P-256 assembly markers" >&2
     echo "(a linux-generic target or broken asm probe produced a no-asm build)" >&2
     exit 1
   fi
+  # Structural gate (consumer SC-P2-2): the generated-assembly OBJECT FILES
+  # must be archive members. Symbol grep counts alone can stay nonzero in a
+  # no-asm build (C-fallback residue references the same names), which is how
+  # a version bump could silently ship variable-time P-256 past the count
+  # check; member names are stable across OpenSSL 3.x versions.
+  for member in "$@"; do
+    "$ar" t "$lib" | grep -qx "libcrypto-lib-$member" || {
+      echo "FATAL: $profile libcrypto.a lacks asm object member libcrypto-lib-$member" >&2
+      echo "(the assembly for this unit was not built — do not release this artifact)" >&2
+      exit 1
+    }
+  done
   grep -q "OpenSSL $VERSION" "$lib" ||
-    { echo "FATAL: $1 libcrypto.a lacks the OpenSSL $VERSION version string" >&2; exit 1; }
+    { echo "FATAL: $profile libcrypto.a lacks the OpenSSL $VERSION version string" >&2; exit 1; }
 }
 
 build_one ohos-arm64 aarch64-linux-ohos linux-aarch64
 build_one ohos-x64 x86_64-linux-ohos linux-x86_64
-verify_asm ohos-arm64 OPENSSL_armcap
-verify_asm ohos-x64 OPENSSL_ia32cap
+verify_asm ohos-arm64 OPENSSL_armcap ecp_nistz256-armv8.o arm64cpuid.o armcap.o
+verify_asm ohos-x64 OPENSSL_ia32cap ecp_nistz256-x86_64.o x86_64cpuid.o
 
 echo "== done =="
 ls -l "$OUT"/ohos-*/lib
